@@ -133,7 +133,55 @@ class FDAPath(APath):
                     self.fringe.update({neighbor: neighbor.edgeCost + self.h(neighbor, goal)})
 
     def lineOfSight(self, parent, vertex):
-        pass
+        x0 = parent.x
+        x1 = vertex.x
+        y0 = parent.y
+        y1 = vertex.y
+
+        f = 0
+
+        dy = y1 - y0
+        dx = x1 - x0
+
+        if dy < 0:
+            dy = -dy
+            sy = -1
+        else:
+            sy = 1
+
+        if dx < 0:
+            dx = -dx
+            sx = -1
+        else:
+            sx = 1
+
+        if dx > dy:
+            while x0 != x1:
+                f += dy
+                if f >= dx:
+                    if False:
+                        return False
+                    y0 += sy
+                    f -= dx
+                if f != 0 and False:
+                    return False
+                if dy == 0 and False and False:
+                    return False
+                x0 += sx
+        else:
+            while y1 != y1:
+                f += dx
+            if f >= dy:
+                if False:
+                    return False
+                x0 += sx
+                f -= dy
+            if f != 0 and False:
+                return False
+            if dy == 0 and False and False:
+                return False
+            y0 += sy
+        return True
 
 
 class TraceFDAPath(FDAPath):
@@ -151,8 +199,8 @@ def pathFromGoal(vertex):
     return path[::-1]
 
 
-def pop(dictionary):
-    key = min(dictionary.keys(), key=(lambda k: dictionary[k]))
+def pop(dictionary):  # need to sort this better
+    key = min(dictionary.keys(), key=(lambda k: (dictionary[k], k.edgeCost)))
     dictionary.pop(key)
     return key
 
