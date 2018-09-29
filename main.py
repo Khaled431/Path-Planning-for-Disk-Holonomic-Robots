@@ -14,7 +14,7 @@ class Vertex:  # Defined as a tile,, pre calculate the cost of these
         self.x = x
         self.y = y
 
-        self.parent = None
+        self.parent = self
         self.filled = False
 
         self.neighbors = []
@@ -25,7 +25,7 @@ class Vertex:  # Defined as a tile,, pre calculate the cost of these
 
     def reset(self):
         self.edgeCost = 1
-        self.parent = None
+        self.parent = self
 
 
 class Graph:  # We are going for a grid based approach, so we just need a max height and width as our params
@@ -36,10 +36,10 @@ class Graph:  # We are going for a grid based approach, so we just need a max he
 
         self.vertices = [[Vertex(x, y) for y in range(height)] for x in range(width)]  # type List[List[Vertex]
 
-        self.vertices[1][2].filled = True
-        self.vertices[1][1].filled = True
-        self.vertices[2][2].filled = True
-        self.vertices[2][1].filled = True
+        # self.vertices[1][2].filled = True
+        # self.vertices[1][1].filled = True
+        # self.vertices[2][2].filled = True
+        # self.vertices[2][1].filled = True
 
         for x in range(width):
             for y in range(height):
@@ -134,7 +134,7 @@ class TracePath(APath):
 class FDAPath(APath):
 
     def updateVertex(self, vertex, neighbor, goal):
-        if self.lineOfSight(vertex.parent, vertex):
+        if self.lineOfSight(vertex.parent, neighbor):
             if vertex.parent.edgeCost + Path.c(vertex.parent, neighbor) < neighbor.edgeCost:
                 neighbor.edgeCost = vertex.parent.edgeCost + Path.c(vertex.parent, neighbor)
                 neighbor.parent = vertex.parent
@@ -146,13 +146,15 @@ class FDAPath(APath):
                 neighbor.edgeCost = vertex.edgeCost + Path.c(vertex, neighbor)
                 neighbor.parent = vertex.parent
                 if neighbor in self.fringe:
-                    self.fringe.update({neighbor: neighbor.edgeCost + self.h(neighbor, goal)})
+                    self.fringe.pop(neighbor)
+                self.fringe.update({neighbor: neighbor.edgeCost + self.h(neighbor, goal)})
 
-    def lineOfSight(self, parent, vertex):
+    def lineOfSight(self, parent, neighbor):
         x0 = parent.x
-        x1 = vertex.x
+        x1 = neighbor.x
+
         y0 = parent.y
-        y1 = vertex.y
+        y1 = neighbor.y
 
         f = 0
 
@@ -171,32 +173,34 @@ class FDAPath(APath):
         else:
             sx = 1
 
-        if dx > dy:
+        if dx >= dy:
             while x0 != x1:
                 f += dy
                 if f >= dx:
-                    if False:
+                    if graph.vertices[x0 + ((sx - 1) / 2)][y0 + ((sy - 1) / 2)].filled is True:
                         return False
                     y0 += sy
                     f -= dx
-                if f != 0 and False:
+                if f != 0 and graph.vertices[x0 + ((sx - 1) / 2)][y0 + ((sy - 1) / 2)].filled is True:
                     return False
-                if dy == 0 and False and False:
+                if dy == 0 and graph.vertices[x0 + ((sx - 1) / 2)][y0].filled is True \
+                        and graph.vertices[x0 + ((sx - 1) / 2)][y0 - 1].filled is True:
                     return False
                 x0 += sx
         else:
-            while y1 != y1:
+            while y0 != y1:
                 f += dx
-            if f >= dy:
-                if False:
+                if f >= dy:
+                    if graph.vertices[x0 + ((sx - 1) / 2)][y0 + ((sy - 1) / 2)].filled is True:
+                        return False
+                    x0 += sx
+                    f -= dy
+                if f != 0 and graph.vertices[x0 + ((sx - 1) / 2)][y0 + ((sy - 1) / 2)].filled is True:
                     return False
-                x0 += sx
-                f -= dy
-            if f != 0 and False:
-                return False
-            if dy == 0 and False and False:
-                return False
-            y0 += sy
+                if dx == 0 and graph.vertices[x0][y0 + ((sy - 1) / 2)].filled is True and \
+                        graph.vertices[x0 - 1][y0 + ((sy - 1) / 2)].filled is True:
+                    return False
+                y0 += sy
         return True
 
 
@@ -209,8 +213,10 @@ class TraceFDAPath(FDAPath):
 
 def pathFromGoal(vertex):
     path = []
-    while vertex is not None:
+    while True:
         path.append(vertex)
+        if vertex.parent is vertex:
+            break
         vertex = vertex.parent
     return path[::-1]
 
@@ -224,13 +230,19 @@ def pop(dictionary):  # need to sort this better
 graph = Graph(5, 3)
 astar = APath()
 trace = TracePath()
+fda = FDAPath()
 
 p1 = astar.findPath(graph.vertices[4][2], graph.vertices[0][0])
 p2 = trace.findPath(graph.vertices[4][2], graph.vertices[0][0])
+p3 = fda.findPath(graph.vertices[4][2], graph.vertices[0][0])
 
 for v in p1:
     print v.name()
 print "\n\n"
 
 for v in p2:
+    print v.name()
+print "\n\n"
+
+for v in p3:
     print v.name()
