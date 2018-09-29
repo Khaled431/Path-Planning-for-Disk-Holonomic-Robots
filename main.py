@@ -18,17 +18,17 @@ class Vertex:  # Defined as a tile,, pre calculate the cost of these
         self.filled = False
 
         self.neighbors = []
-        self.edgeCost = 1
+        self.edgeCost = 0
 
     def name(self):
         return str(self.x) + " " + str(self.y)
 
     def reset(self):
-        self.edgeCost = 1
+        self.edgeCost = 0
         self.parent = self
 
 
-class Graph:  # We are going for a grid based approach, so we just need a max height and width as our params
+class Graph:  # We are going for a graph.vertex based approach, so we just need a max height and width as our params
 
     def __init__(self, width, height):
         self.width = width
@@ -36,10 +36,10 @@ class Graph:  # We are going for a grid based approach, so we just need a max he
 
         self.vertices = [[Vertex(x, y) for y in range(height)] for x in range(width)]  # type List[List[Vertex]
 
-        # self.vertices[1][2].filled = True
-        # self.vertices[1][1].filled = True
-        # self.vertices[2][2].filled = True
-        # self.vertices[2][1].filled = True
+        self.vertices[1][2].filled = True  # Todo remove this when loading real fill data
+        self.vertices[1][1].filled = True
+        self.vertices[2][2].filled = True
+        self.vertices[2][1].filled = True
 
         for x in range(width):
             for y in range(height):
@@ -144,29 +144,28 @@ class FDAPath(APath):
         else:
             if vertex.edgeCost + Path.c(vertex, neighbor) < neighbor.edgeCost:
                 neighbor.edgeCost = vertex.edgeCost + Path.c(vertex, neighbor)
-                neighbor.parent = vertex.parent
+                neighbor.parent = vertex
                 if neighbor in self.fringe:
                     self.fringe.pop(neighbor)
                 self.fringe.update({neighbor: neighbor.edgeCost + self.h(neighbor, goal)})
 
-    def lineOfSight(self, parent, neighbor):
-        x0 = parent.x
-        x1 = neighbor.x
+    def lineOfSight(self, fromVertex, toVertex):
+        x0 = fromVertex.x
+        y0 = fromVertex.y
 
-        y0 = parent.y
-        y1 = neighbor.y
+        x1 = toVertex.x
+        y1 = toVertex.y
 
         f = 0
 
         dy = y1 - y0
-        dx = x1 - x0
-
         if dy < 0:
             dy = -dy
             sy = -1
         else:
             sy = 1
 
+        dx = x1 - x0
         if dx < 0:
             dx = -dx
             sx = -1
@@ -175,32 +174,32 @@ class FDAPath(APath):
 
         if dx >= dy:
             while x0 != x1:
-                f += dy
+                f = f + dy
                 if f >= dx:
-                    if graph.vertices[x0 + ((sx - 1) / 2)][y0 + ((sy - 1) / 2)].filled is True:
+                    if graph.vertices[x0 + ((sx - 1) / 2)][y0 + ((sy - 1) / 2)].filled:
                         return False
-                    y0 += sy
-                    f -= dx
-                if f != 0 and graph.vertices[x0 + ((sx - 1) / 2)][y0 + ((sy - 1) / 2)].filled is True:
+                    y0 = y0 + sy
+                    f = f - dx
+                if f != 0 and graph.vertices[x0 + ((sx - 1) / 2)][y0 + ((sy - 1) / 2)].filled:
                     return False
-                if dy == 0 and graph.vertices[x0 + ((sx - 1) / 2)][y0].filled is True \
-                        and graph.vertices[x0 + ((sx - 1) / 2)][y0 - 1].filled is True:
+                if dy == 0 and graph.vertices[x0 + ((sx - 1) / 2)][y0].filled \
+                        and graph.vertices[x0 + ((sx - 1) / 2)][y0 - 1].filled:
                     return False
-                x0 += sx
+                x0 = x0 + sx
         else:
             while y0 != y1:
-                f += dx
+                f = f + dx
                 if f >= dy:
-                    if graph.vertices[x0 + ((sx - 1) / 2)][y0 + ((sy - 1) / 2)].filled is True:
+                    if graph.vertices[x0 + ((sx - 1) / 2)][y0 + ((sy - 1) / 2)].filled:
                         return False
-                    x0 += sx
-                    f -= dy
-                if f != 0 and graph.vertices[x0 + ((sx - 1) / 2)][y0 + ((sy - 1) / 2)].filled is True:
+                    x0 = x0 + sx
+                    f = f - dy
+                if f != 0 and graph.vertices[x0 + ((sx - 1) / 2)][y0 + ((sy - 1) / 2)].filled:
                     return False
-                if dx == 0 and graph.vertices[x0][y0 + ((sy - 1) / 2)].filled is True and \
-                        graph.vertices[x0 - 1][y0 + ((sy - 1) / 2)].filled is True:
+                if dx == 0 and graph.vertices[x0][y0 + ((sy - 1) / 2)].filled \
+                        and graph.vertices[x0 - 1][y0 + ((sy - 1) / 2)].filled:
                     return False
-                y0 += sy
+                y0 = y0 + sy
         return True
 
 
@@ -232,17 +231,7 @@ astar = APath()
 trace = TracePath()
 fda = FDAPath()
 
-p1 = astar.findPath(graph.vertices[4][2], graph.vertices[0][0])
-p2 = trace.findPath(graph.vertices[4][2], graph.vertices[0][0])
-p3 = fda.findPath(graph.vertices[4][2], graph.vertices[0][0])
-
-for v in p1:
-    print v.name()
-print "\n\n"
-
-for v in p2:
-    print v.name()
-print "\n\n"
+p3 = fda.findPath(graph.vertices[0][0], graph.vertices[4][2])
 
 for v in p3:
     print v.name()
