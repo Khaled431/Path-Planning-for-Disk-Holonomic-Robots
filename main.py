@@ -2,6 +2,7 @@ import sys
 from _ast import List
 from abc import abstractmethod
 import math
+import random
 
 DIRECTIONS_START = -1
 DIRECTIONS_END = 2
@@ -14,14 +15,16 @@ class Vertex:  # Defined as a tile,, pre calculate the cost of these
         self.y = y
 
         self.parent = None
+        self.filled = False
+
         self.neighbors = []
-        self.edgeCost = 0
+        self.edgeCost = 1
 
     def name(self):
         return str(self.x) + " " + str(self.y)
 
     def reset(self):
-        self.edgeCost = 0
+        self.edgeCost = 1
         self.parent = None
 
 
@@ -32,6 +35,12 @@ class Graph:  # We are going for a grid based approach, so we just need a max he
         self.height = height
 
         self.vertices = [[Vertex(x, y) for y in range(height)] for x in range(width)]  # type List[List[Vertex]
+
+        self.vertices[1][2].filled = True
+        self.vertices[1][1].filled = True
+        self.vertices[2][2].filled = True
+        self.vertices[2][1].filled = True
+
         for x in range(width):
             for y in range(height):
                 self.populateNeighbors(self.vertices[x][y])
@@ -46,7 +55,13 @@ class Graph:  # We are going for a grid based approach, so we just need a max he
                 translated_y = vertex.y + y
                 if translated_x >= self.width or translated_x < 0 or translated_y >= self.height or translated_y < 0:
                     continue
-                vertex.neighbors.append(self.vertices[translated_x][translated_y])
+
+                neighbor = self.vertices[translated_x][translated_y]
+                if ((x == 1 and y == 1) or (x == -1 and y == -1) or (x == -1 and y == 1) or (x == 1 and y == -1)) \
+                        and neighbor.filled is True and vertex.filled is True:  # block off filled diagonal neighbors
+                    continue
+
+                vertex.neighbors.append(neighbor)
 
 
 class Path:
@@ -58,13 +73,14 @@ class Path:
     def updateVertex(self, vertex, neighbor, goal): raise NotImplementedError
 
     def h(self, vertex, goal):  # the estimated path cost from the node we're at to the goal node
+
+        # return               max(abs(vertex.x - goal.x), abs(vertex.y - goal.y))
+
         return Path.c(vertex, goal)
 
     @staticmethod
     def c(from_vertex, to_vertex):  # the straight line distance between the s node and e node.
-        dx = from_vertex.x - to_vertex.x
-        dy = from_vertex.y - to_vertex.y
-        return math.sqrt(dx * dx + dy * dy)
+        return math.sqrt((from_vertex.x - to_vertex.x) ** 2 + (from_vertex.y - to_vertex.y) ** 2)
 
     def f(self, vertex):
         return vertex.edgeCost + self.h(vertex)
@@ -112,7 +128,7 @@ class TracePath(APath):
 
     def h(self, vertex, goal):
         min_offset = min(abs(vertex.x - goal.x), abs(vertex.y - goal.y))
-        return math.sqrt(2) * min_offset + max(abs(vertex.x - goal.x), abs(vertex.y - goal.y)) - min_offset
+        return (math.sqrt(2) * min_offset) + max(abs(vertex.x - goal.x), abs(vertex.y - goal.y)) - min_offset
 
 
 class FDAPath(APath):
@@ -200,7 +216,7 @@ def pathFromGoal(vertex):
 
 
 def pop(dictionary):  # need to sort this better
-    key = min(dictionary.keys(), key=(lambda k: (dictionary[k], k.edgeCost)))
+    key = min(dictionary.keys(), key=(lambda k: (dictionary[k], dictionary[k] - sys.maxunicode * k.edgeCost)))
     dictionary.pop(key)
     return key
 
