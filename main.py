@@ -132,9 +132,14 @@ class APath(Path):
         neighbor.edgeCost = vertex.edgeCost + Path.c(vertex, neighbor)
         neighbor.parent = vertex
         if neighbor in self.heap:
-            self.heap.remove(neighbor)
+            del self.heap[neighbor.index]
         self.f(neighbor, goal)
-        bisect.insort_left(self.heap, neighbor)
+        self.add(bisect.bisect_left(self.heap, neighbor), neighbor)
+
+    def add(self, index, vector):
+        vector.index = index
+        self.heap.insert(index, vector)
+        pass
 
 
 class TracePath(APath):
@@ -152,17 +157,17 @@ class FDAPath(APath):
                 neighbor.edgeCost = vertex.parent.edgeCost + Path.c(vertex.parent, neighbor)
                 neighbor.parent = vertex.parent
                 if neighbor in self.heap:
-                    self.heap.remove(neighbor)
+                    del self.heap[neighbor.index]
                 self.f(neighbor, goal)
-                bisect.insort_left(self.heap, neighbor)
+                self.add(bisect.bisect_left(self.heap, neighbor), neighbor)
         else:
             if vertex.edgeCost + Path.c(vertex, neighbor) < neighbor.edgeCost:
                 neighbor.edgeCost = vertex.edgeCost + Path.c(vertex, neighbor)
                 neighbor.parent = vertex
                 if neighbor in self.heap:
-                    self.heap.remove(neighbor)
+                    del self.heap[neighbor.index]
                 self.f(neighbor, goal)
-                bisect.insort_left(self.heap, neighbor)
+                self.add(bisect.bisect_left(self.heap, neighbor), neighbor)
 
     def lineOfSight(self, from_vertex, to_vertex):
         x0 = from_vertex.x
@@ -244,7 +249,7 @@ fdaTrace = TraceFDAPath()
 start = graph.vertices[3][2]
 goal = graph.vertices[0][0]
 
-p1 = fda.findPath(start, goal)
+p1 = fdaTrace.findPath(start, goal)
 
 for v in p1:
     print v.name()
