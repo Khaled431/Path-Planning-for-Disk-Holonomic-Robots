@@ -2,7 +2,8 @@ import sys
 from _ast import List
 from abc import abstractmethod
 import math
-import random
+
+import bisect
 
 DIRECTIONS_START = -1
 DIRECTIONS_END = 2
@@ -19,6 +20,7 @@ class Vertex:  # Defined as a tile,, pre calculate the cost of these
 
         self.neighbors = []
         self.edgeCost = 0
+        self.f = 0
 
     def name(self):
         return str(self.x) + " " + str(self.y)
@@ -26,6 +28,11 @@ class Vertex:  # Defined as a tile,, pre calculate the cost of these
     def reset(self):
         self.edgeCost = 0
         self.parent = self
+        self.f = 0
+
+    def __cmp__(self, other):
+        return cmp((other.f, other.f - sys.maxunicode * other.edgeCost),
+                   (self.f, self.f - sys.maxunicode * self.edgeCost))
 
 
 class Graph:  # We are going for a graph.vertex based approach, so we just need a max height and width as our params
@@ -66,6 +73,9 @@ class Graph:  # We are going for a graph.vertex based approach, so we just need 
 
 class Path:
 
+    def __init__(self):
+        pass
+
     @abstractmethod
     def findPath(self, start, goal): raise NotImplementedError
 
@@ -82,14 +92,15 @@ class Path:
     def c(from_vertex, to_vertex):  # the straight line distance between the s node and e node.
         return math.sqrt((from_vertex.x - to_vertex.x) ** 2 + (from_vertex.y - to_vertex.y) ** 2)
 
-    def f(self, vertex):
-        return vertex.edgeCost + self.h(vertex)
+    def f(self, vertex, goal):
+        vertex.f = vertex.edgeCost + self.h(vertex, goal)
 
 
 class APath(Path):
 
     def __init__(self):
-        self.fringe = dict()
+        Path.__init__(self)
+        self.heap = []
 
     def findPath(self, start, goal):
         closed = []  # type: List[Vertex]
@@ -97,18 +108,19 @@ class APath(Path):
         start.reset()
         goal.reset()
 
-        self.fringe.clear()
-        self.fringe.update({start: start.edgeCost + self.h(start, goal)})
+        self.heap = []
+        self.heap.append(start)
+        start.f = start.edgeCost + self.h(start, goal)
 
-        while len(self.fringe) > 0:
-            vertex = pop(self.fringe)
+        while len(self.heap) > 0:
+            vertex = self.heap.pop()
             if vertex == goal:
                 return pathFromGoal(vertex)
 
             closed.append(vertex)
             for neighbor in vertex.neighbors:
                 if neighbor not in closed:
-                    if neighbor not in self.fringe:
+                    if neighbor not in self.heap:
                         neighbor.edgeCost = sys.maxint
                         neighbor.parent = None
                     self.updateVertex(vertex, neighbor, goal)
@@ -119,9 +131,10 @@ class APath(Path):
             pass
         neighbor.edgeCost = vertex.edgeCost + Path.c(vertex, neighbor)
         neighbor.parent = vertex
-        if neighbor in self.fringe:
-            self.fringe.pop(neighbor)
-        self.fringe.update({neighbor: neighbor.edgeCost + self.h(neighbor, goal)})
+        if neighbor in self.heap:
+            self.heap.remove(neighbor)
+        self.f(neighbor, goal)
+        bisect.insort_left(self.heap, neighbor)
 
 
 class TracePath(APath):
@@ -138,23 +151,25 @@ class FDAPath(APath):
             if vertex.parent.edgeCost + Path.c(vertex.parent, neighbor) < neighbor.edgeCost:
                 neighbor.edgeCost = vertex.parent.edgeCost + Path.c(vertex.parent, neighbor)
                 neighbor.parent = vertex.parent
-                if neighbor in self.fringe:
-                    self.fringe.pop(neighbor)
-                self.fringe.update({neighbor: neighbor.edgeCost + self.h(neighbor, goal)})
+                if neighbor in self.heap:
+                    self.heap.remove(neighbor)
+                self.f(neighbor, goal)
+                bisect.insort_left(self.heap, neighbor)
         else:
             if vertex.edgeCost + Path.c(vertex, neighbor) < neighbor.edgeCost:
                 neighbor.edgeCost = vertex.edgeCost + Path.c(vertex, neighbor)
                 neighbor.parent = vertex
-                if neighbor in self.fringe:
-                    self.fringe.pop(neighbor)
-                self.fringe.update({neighbor: neighbor.edgeCost + self.h(neighbor, goal)})
+                if neighbor in self.heap:
+                    self.heap.remove(neighbor)
+                self.f(neighbor, goal)
+                bisect.insort_left(self.heap, neighbor)
 
-    def lineOfSight(self, fromVertex, toVertex):
-        x0 = fromVertex.x
-        y0 = fromVertex.y
+    def lineOfSight(self, from_vertex, to_vertex):
+        x0 = from_vertex.x
+        y0 = from_vertex.y
 
-        x1 = toVertex.x
-        y1 = toVertex.y
+        x1 = to_vertex.x
+        y1 = to_vertex.y
 
         f = 0
 
@@ -220,18 +235,16 @@ def pathFromGoal(vertex):
     return path[::-1]
 
 
-def pop(dictionary):  # need to sort this better
-    key = min(dictionary.keys(), key=(lambda k: (dictionary[k], dictionary[k] - sys.maxunicode * k.edgeCost)))
-    dictionary.pop(key)
-    return key
-
-
 graph = Graph(5, 3)
 astar = APath()
 trace = TracePath()
 fda = FDAPath()
+fdaTrace = TraceFDAPath()
 
-p3 = fda.findPath(graph.vertices[0][0], graph.vertices[4][2])
+start = graph.vertices[3][2]
+goal = graph.vertices[0][0]
 
-for v in p3:
+p1 = fda.findPath(start, goal)
+
+for v in p1:
     print v.name()
