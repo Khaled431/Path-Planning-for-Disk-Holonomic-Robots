@@ -3,13 +3,13 @@ from _ast import List
 from abc import abstractmethod
 import math
 import bisect
-import threading
+import heapq
 
 DIRECTIONS_START = -1
 DIRECTIONS_END = 2
 
 GRID_EXPANSION = 10
-TURTLE_RADIUS = int(0.5 * GRID_EXPANSION)
+TURTLE_RADIUS = 2
 
 startAndGoals = []
 
@@ -48,9 +48,12 @@ class Vertex:  # Defined as a tile,, pre calculate the cost of these
         self.parent = self
         self.f = 0
 
+    def __hash__(self):
+        return id(self)
+
     def __cmp__(self, other):
-        return cmp((other.f, other.f - sys.maxunicode * other.edgeCost),
-                   (self.f, self.f - sys.maxunicode * self.edgeCost))
+        return cmp((self.f, self.f - sys.maxunicode * self.edgeCost),
+                   (other.f, other.f - sys.maxunicode * other.edgeCost))
 
 
 class Graph:  # We are going for a graph.vertex based approach, so we just need a max height and width as our params
@@ -98,13 +101,12 @@ class Graph:  # We are going for a graph.vertex based approach, so we just need 
 
     def filterNeighbors(self, parent):
         if parent.filtered:
-            pass
+            return
 
         for neighbor in parent.neighbors[:]:
             if self.__filterNeighborLoop(parent, neighbor):
                 continue
         parent.filtered = True
-        pass
 
     def __addPolygonalObstacle(self, points):
         points.sort()
@@ -151,7 +153,7 @@ class Graph:  # We are going for a graph.vertex based approach, so we just need 
             x = neighbor.x
             while True:
 
-                if (x - neighbor.x) * (x - neighbor.x) + (y - neighbor.y) * (y - neighbor.y) >= r2:
+                if (x - neighbor.x) * (x - neighbor.x) + (y - neighbor.y) * (y - neighbor.y) > r2:
                     break
                 if self.__filterNeighborCheck(parent, neighbor, x, y):
                     return True
@@ -159,7 +161,7 @@ class Graph:  # We are going for a graph.vertex based approach, so we just need 
 
             x = neighbor.x + 1
             while True:
-                if (x - neighbor.x) * (x - neighbor.x) + (y - neighbor.y) * (y - neighbor.y) >= r2:
+                if (x - neighbor.x) * (x - neighbor.x) + (y - neighbor.y) * (y - neighbor.y) > r2:
                     break
                 if self.__filterNeighborCheck(parent, neighbor, x, y):
                     return True
@@ -195,11 +197,11 @@ class Path:
 
         # return               max(abs(vertex.x - goal.x), abs(vertex.y - goal.y))
 
-        return Path.c(vertex, goal)
+        return Path.c(goal, vertex) * 1.0001
 
     @staticmethod
     def c(from_vertex, to_vertex):  # the straight line distance between the s node and e node.
-        return math.sqrt((from_vertex.x - to_vertex.x) ** 2 + (from_vertex.y - to_vertex.y) ** 2)
+        return math.hypot(from_vertex.x - to_vertex.x, from_vertex.y - to_vertex.y)
 
     def f(self, vertex, goal):
         vertex.f = vertex.edgeCost + self.h(vertex, goal)
@@ -210,34 +212,36 @@ class APath(Path):
     def __init__(self):
         Path.__init__(self)
         self.heap = []
+        self.openSet = set()
 
     def findPath(self, start, goal):
-        closed = []  # type: List[Vertex]
+        closed = set()  # type: List[Vertex]
 
         start.reset()
         goal.reset()
 
+        self.openSet = set()
         self.heap = []
-        self.heap.append(start)
+        heapq.heapify(self.heap)
+
+        heapq.heappush(self.heap, start)
+        self.openSet.add(start)
         start.f = start.edgeCost + self.h(start, goal)
 
         while len(self.heap) > 0:
-            vertex = self.heap.pop()
+            vertex = heapq.heappop(self.heap)
+
             if vertex == goal:
                 return pathFromGoal(vertex)
 
-            closed.append(vertex)
+            closed.add(vertex)
 
             graph.populateNeighbors(vertex)
-
-            thread1 = threading.Thread(target=graph.filterNeighbors, args=(vertex,))
-            thread1.start()
-
-            thread1.join()
+            graph.filterNeighbors(vertex)
 
             for neighbor in vertex.neighbors[:]:
                 if neighbor not in closed:
-                    if neighbor not in self.heap:
+                    if neighbor not in self.openSet:
                         neighbor.edgeCost = sys.maxint
                         neighbor.parent = None
                     self.updateVertex(vertex, neighbor, goal)
@@ -245,16 +249,18 @@ class APath(Path):
 
     def updateVertex(self, vertex, neighbor, goal):
         if vertex.edgeCost + Path.c(vertex, neighbor) >= neighbor.edgeCost:
-            pass
+            return
         neighbor.edgeCost = vertex.edgeCost + Path.c(vertex, neighbor)
         neighbor.parent = vertex
-        if neighbor in self.heap:
+        if neighbor in self.openSet:
             self.heap.remove(neighbor)
+            heapq.heapify(self.heap)
         self.f(neighbor, goal)
-        self.add(bisect.bisect_left(self.heap, neighbor), neighbor)
+        self.add(neighbor)
 
-    def add(self, index, vector):
-        self.heap.insert(index, vector)
+    def add(self, vector):
+        heapq.heappush(self.heap, vector)
+        self.openSet.add(vector)
         pass
 
 
@@ -272,18 +278,20 @@ class FDAPath(APath):
             if vertex.parent.edgeCost + Path.c(vertex.parent, neighbor) < neighbor.edgeCost:
                 neighbor.edgeCost = vertex.parent.edgeCost + Path.c(vertex.parent, neighbor)
                 neighbor.parent = vertex.parent
-                if neighbor in self.heap:
+                if neighbor in self.openSet:
                     self.heap.remove(neighbor)
+                    heapq.heapify(self.heap)
                 self.f(neighbor, goal)
-                self.add(bisect.bisect_left(self.heap, neighbor), neighbor)
+                self.add(neighbor)
         else:
             if vertex.edgeCost + Path.c(vertex, neighbor) < neighbor.edgeCost:
                 neighbor.edgeCost = vertex.edgeCost + Path.c(vertex, neighbor)
                 neighbor.parent = vertex
-                if neighbor in self.heap:
+                if neighbor in self.openSet:
                     self.heap.remove(neighbor)
+                    heapq.heapify(self.heap)
                 self.f(neighbor, goal)
-                self.add(bisect.bisect_left(self.heap, neighbor), neighbor)
+                self.add(neighbor)
 
     def lineOfSight(self, from_vertex, to_vertex):
         x0 = from_vertex.x
@@ -346,35 +354,25 @@ class TraceFDAPath(FDAPath):
         return math.sqrt(2) * min_offset + max(abs(vertex.x - goal.x), abs(vertex.y - goal.y)) - min_offset
 
 
-def point_inside_polygon(vertex, poly, include_edges=True):
+def point_inside_polygon(vertex, poly):
     x = vertex.x
     y = vertex.y
 
     n = len(poly)
     inside = False
-
+    p2x = 0.0
+    p2y = 0.0
+    xints = 0.0
     p1x, p1y = poly[0]
-    for i in range(1, n + 1):
+    for i in range(n + 1):
         p2x, p2y = poly[i % n]
-        if p1y == p2y:
-            if y == p1y:
-                if min(p1x, p2x) <= x <= max(p1x, p2x):
-                    # point is on horisontal edge
-                    inside = include_edges
-                    break
-                elif x < min(p1x, p2x):  # point is to the left from current edge
-                    inside = not inside
-        else:  # p1y!= p2y
-            if min(p1y, p2y) <= y <= max(p1y, p2y):
-                xinters = (y - p1y) * (p2x - p1x) / float(p2y - p1y) + p1x
-
-                if x == xinters:  # point is right on the edge
-                    inside = include_edges
-                    break
-
-                if x < xinters:  # point is to the left from current edge
-                    inside = not inside
-
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xints = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or x <= xints:
+                        inside = not inside
         p1x, p1y = p2x, p2y
 
     return inside
@@ -396,36 +394,36 @@ def print_board(board):
         print " ".join(row)
 
 
-graph = Graph("map1.txt")
+graph = Graph("map5.txt")
 
 astar = APath()
 trace = TracePath()
 fda = FDAPath()
 fdaTrace = TraceFDAPath()
 
-for startAndGoal in startAndGoals:
-    start = graph.vertices[startAndGoal[0][0]][startAndGoal[0][1]]
-    goal = graph.vertices[startAndGoal[1][0]][startAndGoal[1][1]]
+startAndGoal = startAndGoals[0]
+start = graph.vertices[startAndGoal[0][0]][startAndGoal[0][1]]
+goal = graph.vertices[startAndGoal[1][0]][startAndGoal[1][1]]
 
-    path = astar.findPath(start, goal)
-    board = []
+path = astar.findPath(start, goal)
+board = []
 
-    for row in range(graph.height):
-        board.append([])
-        for column in range(graph.width):
-            vertex = graph.vertices[column][row]
-            if vertex.filled:
-                board[row].append('x')
+for row in range(graph.height):
+    board.append([])
+    for column in range(graph.width):
+        vertex = graph.vertices[column][row]
+        if vertex.filled:
+            board[row].append('x')
+        else:
+            if start.name() == vertex.name():
+                board[row].append("S")
             else:
-                if start.name() == vertex.name():
-                    board[row].append("s")
+                if goal.name() == vertex.name():
+                    board[row].append("E")
                 else:
-                    if goal.name() == vertex.name():
-                        board[row].append("e")
+                    if vertex in path:
+                        board[row].append('/')
                     else:
-                        if vertex in path:
-                            board[row].append('.')
-                        else:
-                            board[row].append('-')
+                        board[row].append('-')
 
-    print_board(board)
+print_board(board)
