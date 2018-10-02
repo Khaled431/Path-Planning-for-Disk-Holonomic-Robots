@@ -2,11 +2,14 @@ import sys
 from _ast import List
 from abc import abstractmethod
 import math
-
 import bisect
+import threading
 
 DIRECTIONS_START = -1
 DIRECTIONS_END = 2
+
+GRID_EXPANSION = 10
+TURTLE_RADIUS = 2
 
 
 class Vertex:  # Defined as a tile,, pre calculate the cost of these
@@ -17,6 +20,8 @@ class Vertex:  # Defined as a tile,, pre calculate the cost of these
 
         self.parent = self
         self.filled = False
+        self.filtered = False
+        self.populated = False
 
         self.neighbors = []
         self.edgeCost = 0
@@ -38,21 +43,41 @@ class Vertex:  # Defined as a tile,, pre calculate the cost of these
 class Graph:  # We are going for a graph.vertex based approach, so we just need a max height and width as our params
 
     def __init__(self, width, height):
+        width *= GRID_EXPANSION
+        height *= GRID_EXPANSION
+
         self.width = width
         self.height = height
 
-        self.vertices = [[Vertex(x, y) for y in range(height)] for x in range(width)]  # type List[List[Vertex]
+        self.vertices = [[Vertex(x, y) for y in range(height)] for x in range(width)]
 
-        self.vertices[1][2].filled = True  # Todo remove this when loading real fill data
-        self.vertices[1][1].filled = True
-        self.vertices[2][2].filled = True
-        self.vertices[2][1].filled = True
+        self.__addPolygonalObstacle([[0, 0], [20, 20], [0, 30]])
 
-        for x in range(width):
-            for y in range(height):
-                self.populateNeighbors(self.vertices[x][y])
+    def filterNeighbors(self, parent):
+        if parent.filtered:
+            pass
+
+        for neighbor in parent.neighbors[:]:
+            if self.__filterNeighborLoop(parent, neighbor):
+                continue
+        parent.filtered = True
+        pass
+
+    def __addPolygonalObstacle(self, points):
+        points.sort()
+
+        for x in range(self.width):
+            for y in range(self.height):
+                vertex = self.vertices[x][y]
+                if not point_inside_polygon(vertex, points):
+                    continue
+                vertex.filled = True
 
     def populateNeighbors(self, vertex):
+        if vertex.populated:
+            return
+        vertex.populated = True
+
         for x in range(DIRECTIONS_START, DIRECTIONS_END):
             for y in range(DIRECTIONS_START, DIRECTIONS_END):
                 if x == 0 and y == 0:
@@ -64,11 +89,52 @@ class Graph:  # We are going for a graph.vertex based approach, so we just need 
                     continue
 
                 neighbor = self.vertices[translated_x][translated_y]
-                if ((x == 1 and y == 1) or (x == -1 and y == -1) or (x == -1 and y == 1) or (x == 1 and y == -1)) \
-                        and neighbor.filled is True and vertex.filled is True:  # block off filled diagonal neighbors
+                # if ((x == 1 and y == 1) or (x == -1 and y == -1) or (x == -1 and y == 1) or (x == 1 and y == -1)) \
+                #       and neighbor.filled is True and vertex.filled is True:  # block off filled diagonal neighbors
+                #   continue
+
+                if neighbor.filled:
                     continue
 
                 vertex.neighbors.append(neighbor)
+
+    def __filterNeighborLoop(self, parent, neighbor):
+        r2 = TURTLE_RADIUS * TURTLE_RADIUS
+        y = neighbor.y - TURTLE_RADIUS
+        while True:
+            if y > neighbor.y + TURTLE_RADIUS:
+                break
+
+            x = neighbor.x
+            while True:
+
+                if (x - neighbor.x) * (x - neighbor.x) + (y - neighbor.y) * (y - neighbor.y) >= r2:
+                    break
+                if self.__filterNeighborCheck(parent, neighbor, x, y):
+                    return True
+                x -= 1
+
+            x = neighbor.x + 1
+            while True:
+                if (x - neighbor.x) * (x - neighbor.x) + (y - neighbor.y) * (y - neighbor.y) >= r2:
+                    break
+                if self.__filterNeighborCheck(parent, neighbor, x, y):
+                    return True
+                x += 1
+            y += 1
+
+        return False
+
+    def __filterNeighborCheck(self, parent, neighbor, x, y):
+        if x < 0 or x >= self.width or y < 0 or y >= self.height:
+            return False
+
+        vertex = self.vertices[x][y]
+        if (not vertex.filled) and TURTLE_RADIUS <= y <= self.height - TURTLE_RADIUS \
+                and TURTLE_RADIUS <= x <= self.width - TURTLE_RADIUS:
+            return False
+        parent.neighbors.remove(neighbor)
+        return True
 
 
 class Path:
@@ -118,13 +184,22 @@ class APath(Path):
                 return pathFromGoal(vertex)
 
             closed.append(vertex)
-            for neighbor in vertex.neighbors:
+
+            graph.populateNeighbors(vertex)
+
+            thread1 = threading.Thread(target=graph.filterNeighbors, args=(vertex,))
+            thread1.start()
+
+            thread1.join()
+
+
+            for neighbor in vertex.neighbors[:]:
                 if neighbor not in closed:
                     if neighbor not in self.heap:
                         neighbor.edgeCost = sys.maxint
                         neighbor.parent = None
                     self.updateVertex(vertex, neighbor, goal)
-        return None
+        return []
 
     def updateVertex(self, vertex, neighbor, goal):
         if vertex.edgeCost + Path.c(vertex, neighbor) >= neighbor.edgeCost:
@@ -132,12 +207,11 @@ class APath(Path):
         neighbor.edgeCost = vertex.edgeCost + Path.c(vertex, neighbor)
         neighbor.parent = vertex
         if neighbor in self.heap:
-            del self.heap[neighbor.index]
+            self.heap.remove(neighbor)
         self.f(neighbor, goal)
         self.add(bisect.bisect_left(self.heap, neighbor), neighbor)
 
     def add(self, index, vector):
-        vector.index = index
         self.heap.insert(index, vector)
         pass
 
@@ -157,7 +231,7 @@ class FDAPath(APath):
                 neighbor.edgeCost = vertex.parent.edgeCost + Path.c(vertex.parent, neighbor)
                 neighbor.parent = vertex.parent
                 if neighbor in self.heap:
-                    del self.heap[neighbor.index]
+                    self.heap.remove(neighbor)
                 self.f(neighbor, goal)
                 self.add(bisect.bisect_left(self.heap, neighbor), neighbor)
         else:
@@ -165,7 +239,7 @@ class FDAPath(APath):
                 neighbor.edgeCost = vertex.edgeCost + Path.c(vertex, neighbor)
                 neighbor.parent = vertex
                 if neighbor in self.heap:
-                    del self.heap[neighbor.index]
+                    self.heap.remove(neighbor)
                 self.f(neighbor, goal)
                 self.add(bisect.bisect_left(self.heap, neighbor), neighbor)
 
@@ -230,6 +304,40 @@ class TraceFDAPath(FDAPath):
         return math.sqrt(2) * min_offset + max(abs(vertex.x - goal.x), abs(vertex.y - goal.y)) - min_offset
 
 
+def point_inside_polygon(vertex, poly, include_edges=True):
+    x = vertex.x
+    y = vertex.y
+
+    n = len(poly)
+    inside = False
+
+    p1x, p1y = poly[0]
+    for i in range(1, n + 1):
+        p2x, p2y = poly[i % n]
+        if p1y == p2y:
+            if y == p1y:
+                if min(p1x, p2x) <= x <= max(p1x, p2x):
+                    # point is on horisontal edge
+                    inside = include_edges
+                    break
+                elif x < min(p1x, p2x):  # point is to the left from current edge
+                    inside = not inside
+        else:  # p1y!= p2y
+            if min(p1y, p2y) <= y <= max(p1y, p2y):
+                xinters = (y - p1y) * (p2x - p1x) / float(p2y - p1y) + p1x
+
+                if x == xinters:  # point is right on the edge
+                    inside = include_edges
+                    break
+
+                if x < xinters:  # point is to the left from current edge
+                    inside = not inside
+
+        p1x, p1y = p2x, p2y
+
+    return inside
+
+
 def pathFromGoal(vertex):
     path = []
     while True:
@@ -240,16 +348,36 @@ def pathFromGoal(vertex):
     return path[::-1]
 
 
+def print_board(board):
+    board.reverse()
+    for row in board:
+        print " ".join(row)
+
+
 graph = Graph(5, 3)
+
 astar = APath()
 trace = TracePath()
 fda = FDAPath()
 fdaTrace = TraceFDAPath()
 
-start = graph.vertices[3][2]
-goal = graph.vertices[0][0]
+start = graph.vertices[26][9]
+goal = graph.vertices[11][8]
 
-p1 = fdaTrace.findPath(start, goal)
+p1 = fda.findPath(start, goal)
 
-for v in p1:
-    print v.name()
+board = []
+
+for row in range(graph.height):
+    board.append([])
+    for column in range(graph.width):
+        vertex = graph.vertices[column][row]
+        if vertex.filled:
+            board[row].append('x')
+        else:
+            if vertex in p1:
+                board[row].append('.')
+            else:
+                board[row].append('-')
+
+print_board(board)
