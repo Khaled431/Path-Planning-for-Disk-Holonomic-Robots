@@ -13,6 +13,8 @@ TURTLE_RADIUS = 3
 
 startAndGoals = []
 
+__metaclass__ = type
+
 
 class Vertex:  # Defined as a tile,, pre calculate the cost of these
 
@@ -289,7 +291,7 @@ class FDAPath(APath):
                 self.f(neighbor, goal)
                 self.add(neighbor)
         else:
-            super(APath, self).updateVertex(vertex, neighbor, goal)
+            super(FDAPath, self).updateVertex(vertex, neighbor, goal)
 
     def lineOfSight(self, from_vertex, to_vertex):
         x0 = from_vertex.x
@@ -426,30 +428,33 @@ trace = TracePath()
 fda = FDAPath()
 fdaTrace = TraceFDAPath()
 
-startAndGoal = startAndGoals[7]
-start = graph.vertices[startAndGoal[0][0]][startAndGoal[0][1]]
-goal = graph.vertices[startAndGoal[1][0]][startAndGoal[1][1]]
+for startAndGoal in startAndGoals:
+    start = graph.vertices[startAndGoal[0][0]][startAndGoal[0][1]]
+    goal = graph.vertices[startAndGoal[1][0]][startAndGoal[1][1]]
 
-pathVerticies = trace.findPath(start, goal)
-path = map(lambda vertex: (vertex.x, vertex.y), pathVerticies)
-board = []
+    pathVerticies = fda.findPath(start, goal)
+    path = map(lambda vertex: (vertex.x, vertex.y), pathVerticies)
+    board = []
 
-for row in range(graph.height):
-    board.append([])
-    for column in range(graph.width):
-        vertex = graph.vertices[column][row]
-        if vertex.filled:
-            board[row].append('x')
-        else:
-            if start.name() == vertex.name():
-                board[row].append("S")
+    print "Start:\t" + start.name()
+    print "Goal:\t" + goal.name()
+
+    for row in range(graph.height):
+        board.append([])
+        for column in range(graph.width):
+            vertex = graph.vertices[column][row]
+            if vertex.filled:
+                board[row].append('x')
             else:
-                if goal.name() == vertex.name():
-                    board[row].append("E")
+                if start.name() == vertex.name():
+                    board[row].append("S")
                 else:
-                    if (vertex.x, vertex.y) in path:
-                        board[row].append('/')
+                    if goal.name() == vertex.name():
+                        board[row].append("E")
                     else:
-                        board[row].append('-')
+                        if (vertex.x, vertex.y) in path:
+                            board[row].append('/')
+                        else:
+                            board[row].append('-')
 
-print_board(board)
+    print_board(board)
