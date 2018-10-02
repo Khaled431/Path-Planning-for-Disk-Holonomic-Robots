@@ -9,7 +9,9 @@ DIRECTIONS_START = -1
 DIRECTIONS_END = 2
 
 GRID_EXPANSION = 10
-TURTLE_RADIUS = 2
+TURTLE_RADIUS = int(0.5 * GRID_EXPANSION)
+
+startAndGoals = []
 
 
 class Vertex:  # Defined as a tile,, pre calculate the cost of these
@@ -28,7 +30,18 @@ class Vertex:  # Defined as a tile,, pre calculate the cost of these
         self.f = 0
 
     def name(self):
-        return str(self.x) + " " + str(self.y)
+        x = (self.x - graph.lowXCorrection) * 1.0 / GRID_EXPANSION
+        y = (self.y - graph.lowYCorrection) * 1.0 / GRID_EXPANSION
+
+        x_str = str(x)
+        if ".8" in x_str:
+            x_str = x_str.replace(".8", ".75").replace(".3", ".25")
+
+        y_str = str(y)
+        if ".8" in y_str:
+            y_str = y_str.replace(".8", ".75").replace(".3", ".25")
+
+        return x_str + " " + y_str
 
     def reset(self):
         self.edgeCost = 0
@@ -42,16 +55,46 @@ class Vertex:  # Defined as a tile,, pre calculate the cost of these
 
 class Graph:  # We are going for a graph.vertex based approach, so we just need a max height and width as our params
 
-    def __init__(self, width, height):
-        width *= GRID_EXPANSION
-        height *= GRID_EXPANSION
+    def __init__(self, file_directory):
+        self.lowXCorrection = 0
+        self.lowYCorrection = 0
 
-        self.width = width
-        self.height = height
+        state = 0
+        with open(file_directory, "r") as mapFile:
+            for line in mapFile.readlines():
+                if "---" in line:
+                    state += 1
+                else:
+                    split = line.strip().replace("(", "").replace(")", "").split(" ")
+                    points = map(lambda (x, y): (
+                        int(x * GRID_EXPANSION + self.lowXCorrection),
+                        int(y * GRID_EXPANSION + self.lowYCorrection)),
+                                 [tuple(map(float, pair.split(','))) for pair in split])
 
-        self.vertices = [[Vertex(x, y) for y in range(height)] for x in range(width)]
+                    if state == 0:
+                        points.sort()
 
-        self.__addPolygonalObstacle([[0, 0], [20, 20], [0, 30]])
+                        lowX = points[0][0]
+                        lowY = points[0][1]
+
+                        pointsLen = len(points)
+
+                        highX = points[pointsLen - 1][0]
+                        highY = points[pointsLen - 1][1]
+
+                        if lowX < 0:
+                            self.lowXCorrection = -lowX
+                        if lowY < 0:
+                            self.lowYCorrection = -lowY
+
+                        self.width = self.lowXCorrection + highX
+                        self.height = self.lowYCorrection + highY
+
+                        self.vertices = [[Vertex(x, y) for y in range(self.height)] for x in range(self.width)]
+                    if state == 1:
+                        self.__addPolygonalObstacle(points)
+                    if state == 2:
+                        startAndGoals.append(points)
 
     def filterNeighbors(self, parent):
         if parent.filtered:
@@ -191,7 +234,6 @@ class APath(Path):
             thread1.start()
 
             thread1.join()
-
 
             for neighbor in vertex.neighbors[:]:
                 if neighbor not in closed:
@@ -354,30 +396,36 @@ def print_board(board):
         print " ".join(row)
 
 
-graph = Graph(5, 3)
+graph = Graph("map1.txt")
 
 astar = APath()
 trace = TracePath()
 fda = FDAPath()
 fdaTrace = TraceFDAPath()
 
-start = graph.vertices[26][9]
-goal = graph.vertices[11][8]
+for startAndGoal in startAndGoals:
+    start = graph.vertices[startAndGoal[0][0]][startAndGoal[0][1]]
+    goal = graph.vertices[startAndGoal[1][0]][startAndGoal[1][1]]
 
-p1 = fda.findPath(start, goal)
+    path = astar.findPath(start, goal)
+    board = []
 
-board = []
-
-for row in range(graph.height):
-    board.append([])
-    for column in range(graph.width):
-        vertex = graph.vertices[column][row]
-        if vertex.filled:
-            board[row].append('x')
-        else:
-            if vertex in p1:
-                board[row].append('.')
+    for row in range(graph.height):
+        board.append([])
+        for column in range(graph.width):
+            vertex = graph.vertices[column][row]
+            if vertex.filled:
+                board[row].append('x')
             else:
-                board[row].append('-')
+                if start.name() == vertex.name():
+                    board[row].append("s")
+                else:
+                    if goal.name() == vertex.name():
+                        board[row].append("e")
+                    else:
+                        if vertex in path:
+                            board[row].append('.')
+                        else:
+                            board[row].append('-')
 
-print_board(board)
+    print_board(board)
