@@ -3,12 +3,13 @@ from _ast import List
 from abc import abstractmethod
 import math
 import heapq
+import hashlib
 
 DIRECTIONS_START = -1
 DIRECTIONS_END = 2
 
 GRID_EXPANSION = 10
-TURTLE_RADIUS = 4
+TURTLE_RADIUS = 3
 
 startAndGoals = []
 
@@ -48,7 +49,7 @@ class Vertex:  # Defined as a tile,, pre calculate the cost of these
         self.f = 0
 
     def __hash__(self):
-        return id(self)
+        return hash((self.x, self.y))
 
     def __cmp__(self, other):
         return cmp((self.f, self.f - sys.maxunicode * self.edgeCost),
@@ -231,7 +232,7 @@ class APath(Path):
             vertex = heapq.heappop(self.heap)
 
             if vertex == goal:
-                return pathFromGoal(vertex)
+                return pathFromGoal(vertex, start)
 
             closed.add(vertex)
 
@@ -247,18 +248,21 @@ class APath(Path):
         return []
 
     def updateVertex(self, vertex, neighbor, goal):
-        if vertex.edgeCost + Path.c(vertex, neighbor) >= neighbor.edgeCost:
-            return
-        neighbor.edgeCost = vertex.edgeCost + Path.c(vertex, neighbor)
-        neighbor.parent = vertex
-        if neighbor in self.openSet:
-            self.remove(neighbor)
-        self.f(neighbor, goal)
-        self.add(neighbor)
+        if vertex.edgeCost + Path.c(vertex, neighbor) < neighbor.edgeCost:
+            neighbor.edgeCost = vertex.edgeCost + Path.c(vertex, neighbor)
+            neighbor.parent = vertex
+            if neighbor in self.openSet:
+                self.remove(neighbor)
+            self.f(neighbor, goal)
+            self.add(neighbor)
 
     def remove(self, vector):
-        self.heap.remove(vector)
-        heapq.heapify(self.heap)
+        self.openSet.remove(vector)
+        try:
+            self.heap.remove(vector)
+            heapq.heapify(self.heap)
+        except ValueError:
+            pass
 
     def add(self, vector):
         heapq.heappush(self.heap, vector)
@@ -285,13 +289,7 @@ class FDAPath(APath):
                 self.f(neighbor, goal)
                 self.add(neighbor)
         else:
-            if vertex.edgeCost + Path.c(vertex, neighbor) < neighbor.edgeCost:
-                neighbor.edgeCost = vertex.edgeCost + Path.c(vertex, neighbor)
-                neighbor.parent = vertex
-                if neighbor in self.openSet:
-                    self.remove(neighbor)
-                self.f(neighbor, goal)
-                self.add(neighbor)
+            super(APath, self).updateVertex(vertex, neighbor, goal)
 
     def lineOfSight(self, from_vertex, to_vertex):
         x0 = from_vertex.x
@@ -404,11 +402,11 @@ def point_inside_polygon(vertex, poly):
     return inside
 
 
-def pathFromGoal(vertex):
+def pathFromGoal(vertex, start):
     path = []
     while True:
         path.append(vertex)
-        if vertex.parent is vertex:
+        if vertex == start:
             break
         vertex = vertex.parent
     return path[::-1]
@@ -418,6 +416,7 @@ def print_board(board):
     board.reverse()
     for row in board:
         print " ".join(row)
+    print "\n"
 
 
 graph = Graph("map5.txt")
@@ -427,11 +426,12 @@ trace = TracePath()
 fda = FDAPath()
 fdaTrace = TraceFDAPath()
 
-startAndGoal = startAndGoals[4]
+startAndGoal = startAndGoals[7]
 start = graph.vertices[startAndGoal[0][0]][startAndGoal[0][1]]
 goal = graph.vertices[startAndGoal[1][0]][startAndGoal[1][1]]
 
-path = fda.findPath(start, goal)
+pathVerticies = trace.findPath(start, goal)
+path = map(lambda vertex: (vertex.x, vertex.y), pathVerticies)
 board = []
 
 for row in range(graph.height):
@@ -447,7 +447,7 @@ for row in range(graph.height):
                 if goal.name() == vertex.name():
                     board[row].append("E")
                 else:
-                    if vertex in path:
+                    if (vertex.x, vertex.y) in path:
                         board[row].append('/')
                     else:
                         board[row].append('-')
