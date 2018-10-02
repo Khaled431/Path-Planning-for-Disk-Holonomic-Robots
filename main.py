@@ -2,14 +2,13 @@ import sys
 from _ast import List
 from abc import abstractmethod
 import math
-import bisect
 import heapq
 
 DIRECTIONS_START = -1
 DIRECTIONS_END = 2
 
 GRID_EXPANSION = 10
-TURTLE_RADIUS = 2
+TURTLE_RADIUS = 4
 
 startAndGoals = []
 
@@ -197,7 +196,7 @@ class Path:
 
         # return               max(abs(vertex.x - goal.x), abs(vertex.y - goal.y))
 
-        return Path.c(goal, vertex) * 1.0001
+        return Path.c(goal, vertex) * 1.222222
 
     @staticmethod
     def c(from_vertex, to_vertex):  # the straight line distance between the s node and e node.
@@ -253,10 +252,13 @@ class APath(Path):
         neighbor.edgeCost = vertex.edgeCost + Path.c(vertex, neighbor)
         neighbor.parent = vertex
         if neighbor in self.openSet:
-            self.heap.remove(neighbor)
-            heapq.heapify(self.heap)
+            self.remove(neighbor)
         self.f(neighbor, goal)
         self.add(neighbor)
+
+    def remove(self, vector):
+        self.heap.remove(vector)
+        heapq.heapify(self.heap)
 
     def add(self, vector):
         heapq.heappush(self.heap, vector)
@@ -279,8 +281,7 @@ class FDAPath(APath):
                 neighbor.edgeCost = vertex.parent.edgeCost + Path.c(vertex.parent, neighbor)
                 neighbor.parent = vertex.parent
                 if neighbor in self.openSet:
-                    self.heap.remove(neighbor)
-                    heapq.heapify(self.heap)
+                    self.remove(neighbor)
                 self.f(neighbor, goal)
                 self.add(neighbor)
         else:
@@ -288,8 +289,7 @@ class FDAPath(APath):
                 neighbor.edgeCost = vertex.edgeCost + Path.c(vertex, neighbor)
                 neighbor.parent = vertex
                 if neighbor in self.openSet:
-                    self.heap.remove(neighbor)
-                    heapq.heapify(self.heap)
+                    self.remove(neighbor)
                 self.f(neighbor, goal)
                 self.add(neighbor)
 
@@ -320,31 +320,57 @@ class FDAPath(APath):
             while x0 != x1:
                 f = f + dy
                 if f >= dx:
-                    if graph.vertices[x0 + ((sx - 1) / 2)][y0 + ((sy - 1) / 2)].filled:
+                    if self.isRadiusFilled(x0 + ((sx - 1) / 2), y0 + ((sy - 1) / 2)):
                         return False
                     y0 = y0 + sy
                     f = f - dx
-                if f != 0 and graph.vertices[x0 + ((sx - 1) / 2)][y0 + ((sy - 1) / 2)].filled:
+                if f != 0 and self.isRadiusFilled(x0 + ((sx - 1) / 2), y0 + ((sy - 1) / 2)):
                     return False
-                if dy == 0 and graph.vertices[x0 + ((sx - 1) / 2)][y0].filled \
-                        and graph.vertices[x0 + ((sx - 1) / 2)][y0 - 1].filled:
+                if dy == 0 and self.isRadiusFilled(x0 + ((sx - 1) / 2), y0) \
+                        and self.isRadiusFilled(x0 + ((sx - 1) / 2), y0 - 1):
                     return False
                 x0 = x0 + sx
         else:
             while y0 != y1:
                 f = f + dx
                 if f >= dy:
-                    if graph.vertices[x0 + ((sx - 1) / 2)][y0 + ((sy - 1) / 2)].filled:
+                    if self.isRadiusFilled(x0 + ((sx - 1) / 2), y0 + ((sy - 1) / 2)):
                         return False
                     x0 = x0 + sx
                     f = f - dy
-                if f != 0 and graph.vertices[x0 + ((sx - 1) / 2)][y0 + ((sy - 1) / 2)].filled:
+                if f != 0 and self.isRadiusFilled(x0 + ((sx - 1) / 2), y0 + ((sy - 1) / 2)):
                     return False
-                if dx == 0 and graph.vertices[x0][y0 + ((sy - 1) / 2)].filled \
-                        and graph.vertices[x0 - 1][y0 + ((sy - 1) / 2)].filled:
+                if dx == 0 and self.isRadiusFilled(x0, y0 + ((sy - 1) / 2)) \
+                        and self.isRadiusFilled(x0 - 1, y0 + ((sy - 1) / 2)):
                     return False
                 y0 = y0 + sy
         return True
+
+    @staticmethod
+    def isRadiusFilled(centerX, centerY):
+        r2 = 2 * 2
+        y = centerY - 2
+        while True:
+            if y > centerY + 2:
+                break
+
+            x = centerX
+            while True:
+                if (x - centerX) * (x - centerX) + (y - centerY) * (y - centerY) > r2:
+                    break
+                if graph.vertices[x][y].filled:
+                    return True
+                x -= 1
+
+            x = centerX + 1
+            while True:
+                if (x - centerX) * (x - centerX) + (y - centerY) * (y - centerY) > r2:
+                    break
+                if graph.vertices[x][y].filled:
+                    return True
+                x += 1
+            y += 1
+        return False
 
 
 class TraceFDAPath(FDAPath):
@@ -401,11 +427,11 @@ trace = TracePath()
 fda = FDAPath()
 fdaTrace = TraceFDAPath()
 
-startAndGoal = startAndGoals[0]
+startAndGoal = startAndGoals[4]
 start = graph.vertices[startAndGoal[0][0]][startAndGoal[0][1]]
 goal = graph.vertices[startAndGoal[1][0]][startAndGoal[1][1]]
 
-path = astar.findPath(start, goal)
+path = fda.findPath(start, goal)
 board = []
 
 for row in range(graph.height):
